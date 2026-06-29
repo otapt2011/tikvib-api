@@ -4,15 +4,13 @@
   "description": "Proxy API to scrape TikVib profile data",
   "main": "api/index.js",
   "scripts": {
-    "start": "node api/index.js",
-    "dev": "vercel dev"
+    "start": "node api/index.js"
   },
   "dependencies": {
+    "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "puppeteer-core": "^21.0.0",
-    "@sparticuz/chromium": "^121.0.0"
+    "express": "^4.19.2"
   },
   "engines": {
     "node": ">=18"
