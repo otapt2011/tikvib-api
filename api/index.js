@@ -93,7 +93,23 @@ function scrapeProfile(html, username) {
 
   return { profile, videos };
 }
-
+// DEBUG: expose raw response (temporary – remove after test)
+app.get('/debug/profile/:username', async (req, res) => {
+  const { username } = req.params;
+  const page = req.query.page || 1;
+  try {
+    const url = `https://www.tikvib.com/profile/${username}?page=${page}`;
+    const html = await fetchPage(url);
+    res.set('Content-Type', 'text/plain');
+    res.send(`STATUS: 200\nURL: ${url}\n\n${html.substring(0, 2000)}`);
+  } catch (error) {
+    res.json({
+      error: error.message,
+      status: error.response?.status,
+      headers: error.response?.headers,
+    });
+  }
+});
 // API endpoint
 app.get('/api/profile/:username', async (req, res) => {
   const { username } = req.params;
