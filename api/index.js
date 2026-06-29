@@ -164,9 +164,17 @@ app.get('/api/profile/:username', async (req, res) => {
     }
 
     res.json(responseData);
-  } catch (error) {
-    console.error(`Error scraping ${username}:`, error.message);
-    res.status(500).json({ error: 'Failed to fetch profile data' });
+} catch (error) {
+    console.error(`Error scraping ${username}:`, error);
+    // Temporarily return the raw error for debugging
+    res.status(500).json({
+      error: 'Failed to fetch profile data',
+      details: {
+        message: error.message,
+        stack: error.stack,
+        type: error.constructor.name
+      }
+    });
   }
 });
 
