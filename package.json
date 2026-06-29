@@ -1,7 +1,7 @@
 {
   "name": "tikvib-proxy",
   "version": "1.0.0",
-  "description": "Proxy API to scrape TikVib profile data",
+  "description": "Proxy API to scrape TikVib profile data via browserless.io",
   "main": "api/index.js",
   "scripts": {
     "start": "node api/index.js"
