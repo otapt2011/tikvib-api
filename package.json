@@ -8,10 +8,11 @@
     "dev": "vercel dev"
   },
   "dependencies": {
-    "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "puppeteer-core": "^22.10.0",
+    "@sparticuz/chromium": "^128.0.0"
   },
   "engines": {
     "node": ">=18"
