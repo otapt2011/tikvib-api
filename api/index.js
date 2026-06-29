@@ -121,9 +121,13 @@ app.get('/api/profile/:username', async (req, res) => {
 
     cache.set(cacheKey, { timestamp: Date.now(), data });
     res.json(data);
-  } catch (error) {
-    console.error('Error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch profile data' });
+} catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch profile data',
+      reason: error.message,            // <-- shows the actual reason
+      details: error.response?.data?.substring(0, 300) || null,
+    });
   }
 });
 
