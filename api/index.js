@@ -108,6 +108,74 @@ app.get('/api/profile/:username', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch profile data' });
   }
 });
+// Scrape a single TikTok media (video) page
+app.get('/api/media/:mediaId', async (req, res) => {
+  const { mediaId } = req.params;
+
+  try {
+    const url = `https://www.tikvib.com/media/${mediaId}`;
+    const html = await fetchPageWithBrowserless(url);
+
+    if (html.includes('Page not found') || html.includes('Error 404')) {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+
+    const $ = cheerio.load(html);
+
+    // --- Video details ---
+    const title = $('.media-title, .video-title, h1').first().text().trim() || null;
+    const videoSrc = $('video source').attr('src')
+                      || $('.video-player video').attr('src')
+                      || $('meta[property="og:video"]').attr('content')
+                      || null;
+
+    // Download links (often inside .download-block or data-source attributes)
+    const downloadVideo = $('.download-block a[download]').first().attr('href')
+                          || $('.download-btn[data-type="video"]').attr('data-source')
+                          || null;
+    const downloadMusic = $('.download-block a.download-music').attr('href')
+                          || $('.download-btn[data-type="music"]').attr('data-source')
+                          || null;
+
+    // Stats (may be in a table or data attributes)
+    const likes = $('.stat-likes, [data-stat="likes"]').text().trim()
+                  || $('[property="og:description"]').attr('content')?.match(/(\d+)\s*likes/i)?.[1]
+                  || null;
+    const views = $('.stat-views, [data-stat="views"]').text().trim() || null;
+    const comments = $('.stat-comments, [data-stat="comments"]').text().trim() || null;
+
+    // Author info
+    const authorName = $('.media-author a, .author-name').first().text().trim() || null;
+    const authorLink = $('.media-author a, .author-name').first().attr('href') || null;
+
+    // Description (often from meta tag)
+    const description = $('meta[name="description"]').attr('content')?.trim() || null;
+
+    res.json({
+      mediaId,
+      title,
+      description,
+      videoSrc,          // direct .mp4 URL (may expire)
+      download: {
+        video: downloadVideo,
+        music: downloadMusic,
+      },
+      stats: {
+        likes,
+        views,
+        comments,
+      },
+      author: {
+        name: authorName,
+        link: authorLink ? `https://www.tikvib.com${authorLink}` : null,
+      },
+      page: 1,           // media pages are single
+    });
+  } catch (error) {
+    console.error('Media scrape error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch media data' });
+  }
+});
 
 app.get('/', (_, res) => res.send('TikVib Proxy API'));
 module.exports = app;
