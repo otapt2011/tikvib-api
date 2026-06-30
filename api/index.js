@@ -23,7 +23,7 @@ async function fetchPageWithBrowserless(url) {
     `https://chrome.browserless.io/content?token=${apiKey}`,
     {
       url,
-      waitForSelector: '.profile-image',  // wait until the avatar loads
+      waitForTimeout: 5000,           // wait 5 seconds for dynamic content
       gotoOptions: {
         waitUntil: 'networkidle0',
         timeout: 20000,
