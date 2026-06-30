@@ -110,60 +110,19 @@ app.get('/api/profile/:username', async (req, res) => {
 });
 // Scrape a single TikTok media (video) page
 
-/**
- * Fetch a media page from TikVib, bypassing Cloudflare.
- * Includes a generic Referer and retries if a challenge is detected.
- */
-/**
- * Fetch a media page from TikVib, bypassing Cloudflare.
- * Uses extraHTTPHeaders inside gotoOptions and retries on challenge.
- */
-async function fetchMediaPageWithBrowserless(url) {
-  const apiKey = process.env.BROWSERLESS_API_KEY;
-  if (!apiKey) throw new Error('Missing BROWSERLESS_API_KEY');
-
-  const makeRequest = async (waitMs = 5000) => {
-    const resp = await axios.post(
-      `https://chrome.browserless.io/content?token=${apiKey}`,
-      {
-        url,
-        gotoOptions: {
-          waitUntil: 'networkidle0',
-          timeout: 20000,
-          extraHTTPHeaders: {
-            'Referer': 'https://www.tikvib.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-          },
-        },
-        waitForTimeout: waitMs,
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000,
-      }
-    );
-    return resp.data;
-  };
-
-  let html = await makeRequest(5000);
-
-  if (html.includes('Just a moment') || html.includes('Checking your browser')) {
-    console.log('Cloudflare detected on media page, retrying…');
-    html = await makeRequest(10000);
-  }
-
-  return html;
-}
-// Scrape a single TikTok media (video) page – updated selectors
-// Scrape a single TikTok media (video) page – Cloudflare‑proof
+/**// Scrape a single TikTok media (video) page
 app.get('/api/media/:mediaId', async (req, res) => {
   const { mediaId } = req.params;
 
   try {
+    // Use the SAME function that works for profiles – no custom headers needed
     const url = `https://www.tikvib.com/media/${mediaId}`;
-    const html = await fetchMediaPageWithBrowserless(url);
+    const html = await fetchPageWithBrowserless(url);
+
+    if (html.includes('Page not found') || html.includes('Error 404')) {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+
     const $ = cheerio.load(html);
 
     // ── Video source & poster ───────────────────────
@@ -208,16 +167,12 @@ app.get('/api/media/:mediaId', async (req, res) => {
         link: authorLink ? `https://www.tikvib.com${authorLink}` : null,
       },
     });
-} catch (error) {
-    console.error('Media scrape error:', error);
-    // TEMPORARY – return the real error for debugging
-    res.status(500).json({
-      error: 'Failed to fetch media data',
-      reason: error.message,
-      response: error.response?.data?.substring?.(0, 300) || null,
-    });
+  } catch (error) {
+    console.error('Media scrape error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch media data' });
   }
 });
 
 app.get('/', (_, res) => res.send('TikVib Proxy API'));
 module.exports = app;
+
