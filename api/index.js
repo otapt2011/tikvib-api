@@ -96,9 +96,11 @@ function scrapeProfile(html, username) {
 }
 
 // --- API endpoint ---
+// API endpoint
 app.get('/api/profile/:username', async (req, res) => {
   const { username } = req.params;
   const page = req.query.page || 1;
+  const raw = req.query.raw === '1';   // <-- raw mode for debugging
 
   if (!username || username.trim().length === 0) {
     return res.status(400).json({ error: 'Username is required' });
@@ -106,13 +108,19 @@ app.get('/api/profile/:username', async (req, res) => {
 
   const cacheKey = `${username}_${page}`;
   const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (!raw && cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return res.json(cached.data);
   }
 
   try {
     const url = `https://www.tikvib.com/profile/${username}?page=${page}`;
     const html = await fetchPageWithBrowserless(url);
+
+    // If raw mode, return the full HTML (you can search for the profile section)
+    if (raw) {
+      res.set('Content-Type', 'text/plain');
+      return res.send(html);
+    }
 
     if (
       html.includes('Profile not found') ||
