@@ -114,6 +114,10 @@ app.get('/api/profile/:username', async (req, res) => {
  * Fetch a media page from TikVib, bypassing Cloudflare.
  * Includes a generic Referer and retries if a challenge is detected.
  */
+/**
+ * Fetch a media page from TikVib, bypassing Cloudflare.
+ * Uses extraHTTPHeaders inside gotoOptions and retries on challenge.
+ */
 async function fetchMediaPageWithBrowserless(url) {
   const apiKey = process.env.BROWSERLESS_API_KEY;
   if (!apiKey) throw new Error('Missing BROWSERLESS_API_KEY');
@@ -126,14 +130,14 @@ async function fetchMediaPageWithBrowserless(url) {
         gotoOptions: {
           waitUntil: 'networkidle0',
           timeout: 20000,
+          extraHTTPHeaders: {
+            'Referer': 'https://www.tikvib.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          },
         },
         waitForTimeout: waitMs,
-        headers: {
-          'Referer': 'https://www.tikvib.com/',   // generic – works for any video
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-        },
       },
       {
         headers: { 'Content-Type': 'application/json' },
@@ -143,10 +147,8 @@ async function fetchMediaPageWithBrowserless(url) {
     return resp.data;
   };
 
-  // First attempt
   let html = await makeRequest(5000);
 
-  // If Cloudflare challenge still present, retry with a longer wait
   if (html.includes('Just a moment') || html.includes('Checking your browser')) {
     console.log('Cloudflare detected on media page, retrying…');
     html = await makeRequest(10000);
