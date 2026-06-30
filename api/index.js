@@ -7,9 +7,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// In‑memory cache (5 min TTL)
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
+// -------------------------------------------------------------------
+// Browserless fetch (used by both profile and media routes)
+// -------------------------------------------------------------------
 async function fetchPageWithBrowserless(url) {
   const apiKey = process.env.BROWSERLESS_API_KEY;
   if (!apiKey) throw new Error('Missing BROWSERLESS_API_KEY');
@@ -32,6 +36,9 @@ async function fetchPageWithBrowserless(url) {
   return response.data;
 }
 
+// -------------------------------------------------------------------
+// Scraping logic for profiles (unchanged)
+// -------------------------------------------------------------------
 function scrapeProfile(html, username) {
   const $ = cheerio.load(html);
   const profile = { username };
@@ -78,6 +85,9 @@ function scrapeProfile(html, username) {
   return { profile, videos };
 }
 
+// -------------------------------------------------------------------
+// Profile route (unchanged)
+// -------------------------------------------------------------------
 app.get('/api/profile/:username', async (req, res) => {
   const { username } = req.params;
   const page = parseInt(req.query.page) || 1;
@@ -101,21 +111,22 @@ app.get('/api/profile/:username', async (req, res) => {
 
     const { profile, videos } = scrapeProfile(html, username);
     const data = { username, ...profile, videos, page };
+
     cache.set(cacheKey, { timestamp: Date.now(), data });
     res.json(data);
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('Profile scrape error:', error.message);
     res.status(500).json({ error: 'Failed to fetch profile data' });
   }
 });
-// Scrape a single TikTok media (video) page
 
-/**// Scrape a single TikTok media (video) page
+// -------------------------------------------------------------------
+// Media route (new, uses the SAME fetch function – no extra headers)
+// -------------------------------------------------------------------
 app.get('/api/media/:mediaId', async (req, res) => {
   const { mediaId } = req.params;
 
   try {
-    // Use the SAME function that works for profiles – no custom headers needed
     const url = `https://www.tikvib.com/media/${mediaId}`;
     const html = await fetchPageWithBrowserless(url);
 
@@ -173,6 +184,7 @@ app.get('/api/media/:mediaId', async (req, res) => {
   }
 });
 
+// Health check
 app.get('/', (_, res) => res.send('TikVib Proxy API'));
-module.exports = app;
 
+module.exports = app;
