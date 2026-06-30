@@ -109,6 +109,7 @@ app.get('/api/profile/:username', async (req, res) => {
   }
 });
 // Scrape a single TikTok media (video) page
+// Scrape a single TikTok media (video) page – updated selectors
 app.get('/api/media/:mediaId', async (req, res) => {
   const { mediaId } = req.params;
 
@@ -122,54 +123,66 @@ app.get('/api/media/:mediaId', async (req, res) => {
 
     const $ = cheerio.load(html);
 
-    // --- Video details ---
-    const title = $('.media-title, .video-title, h1').first().text().trim() || null;
-    const videoSrc = $('video source').attr('src')
-                      || $('.video-player video').attr('src')
-                      || $('meta[property="og:video"]').attr('content')
-                      || null;
+    // ── Video source & poster ───────────────────────
+    const videoEl = $('video#video').first();
+    let videoSrc = videoEl.attr('src');               // e.g. "/player/7656653356366073109"
+    if (videoSrc && videoSrc.startsWith('/')) {
+      videoSrc = `https://www.tikvib.com${videoSrc}`;
+    }
+    const poster = videoEl.attr('poster') || null;    // thumbnail
 
-    // Download links (often inside .download-block or data-source attributes)
-    const downloadVideo = $('.download-block a[download]').first().attr('href')
-                          || $('.download-btn[data-type="video"]').attr('data-source')
-                          || null;
-    const downloadMusic = $('.download-block a.download-music').attr('href')
-                          || $('.download-btn[data-type="music"]').attr('data-source')
-                          || null;
+    // ── Author ─────────────────────────────────────
+    const authorName = $('.video-info-username').first().text().trim() || null;
+    const authorLink = $('.video-info-username').first().attr('href') || null;
 
-    // Stats (may be in a table or data attributes)
-    const likes = $('.stat-likes, [data-stat="likes"]').text().trim()
-                  || $('[property="og:description"]').attr('content')?.match(/(\d+)\s*likes/i)?.[1]
-                  || null;
-    const views = $('.stat-views, [data-stat="views"]').text().trim() || null;
-    const comments = $('.stat-comments, [data-stat="comments"]').text().trim() || null;
+    // ── Stats ─────────────────────────────────────
+    const likes = $('.video-stat-item .video-stat-number').eq(0).text().trim() || null;
+    const comments = $('.video-stat-item .video-stat-number').eq(1).text().trim() || null;
+    const shares = $('.video-stat-item .video-stat-number').eq(2).text().trim() || null;
+    const collections = $('.video-stat-item .video-stat-number').eq(3).text().trim() || null;
+    const viewsEl = $('.video-stat-item.views .video-stat-number').first();
+    const views = viewsEl.length ? viewsEl.text().trim() : (
+      $('.video-stat-bottom .video-stat-views span').text().replace(/\D/g, '').trim() || null
+    );
 
-    // Author info
-    const authorName = $('.media-author a, .author-name').first().text().trim() || null;
-    const authorLink = $('.media-author a, .author-name').first().attr('href') || null;
+    // ── Download links ─────────────────────────────
+    const downloadVideo = $('.download-cards .download-media-button').eq(0).attr('href') || null;
+    const downloadMusic = $('.download-cards .download-media-button').eq(1).attr('href') || null;
+    // Make them absolute
+    const absDownloadVideo = downloadVideo
+      ? (downloadVideo.startsWith('http') ? downloadVideo : `https://www.tikvib.com${downloadVideo}`)
+      : null;
+    const absDownloadMusic = downloadMusic
+      ? (downloadMusic.startsWith('http') ? downloadMusic : `https://www.tikvib.com${downloadMusic}`)
+      : null;
 
-    // Description (often from meta tag)
+    // ── Metadata ───────────────────────────────────
+    const title = $('title').first().text().trim().replace(/\s*-\s*Tikvib.*$/i, '') || null;
     const description = $('meta[name="description"]').attr('content')?.trim() || null;
 
     res.json({
       mediaId,
       title,
       description,
-      videoSrc,          // direct .mp4 URL (may expire)
+      video: {
+        src: videoSrc,           // direct video stream URL (may require referrer)
+        poster,
+      },
       download: {
-        video: downloadVideo,
-        music: downloadMusic,
+        video: absDownloadVideo, // e.g. https://www.tikvib.com/tiktok-download/...
+        music: absDownloadMusic,
       },
       stats: {
         likes,
         views,
         comments,
+        shares,
+        collections,
       },
       author: {
         name: authorName,
         link: authorLink ? `https://www.tikvib.com${authorLink}` : null,
       },
-      page: 1,           // media pages are single
     });
   } catch (error) {
     console.error('Media scrape error:', error.message);
