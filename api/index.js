@@ -206,9 +206,14 @@ app.get('/api/media/:mediaId', async (req, res) => {
         link: authorLink ? `https://www.tikvib.com${authorLink}` : null,
       },
     });
-  } catch (error) {
-    console.error('Media scrape error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch media data' });
+} catch (error) {
+    console.error('Media scrape error:', error);
+    // TEMPORARY – return the real error for debugging
+    res.status(500).json({
+      error: 'Failed to fetch media data',
+      reason: error.message,
+      response: error.response?.data?.substring?.(0, 300) || null,
+    });
   }
 });
 
