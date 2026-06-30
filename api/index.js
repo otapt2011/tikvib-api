@@ -77,6 +77,7 @@ function scrapeProfile(html, username) {
         views: infoEl.attr('data-views') || null,
         comments: infoEl.attr('data-comments') || null,
         shares: infoEl.attr('data-shares') || null,
+        collections: infoEl.attr('data-collections') || null,
       },
       posted: infoEl.attr('data-time') || null,
     });
