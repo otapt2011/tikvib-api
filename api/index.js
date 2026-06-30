@@ -109,27 +109,68 @@ app.get('/api/profile/:username', async (req, res) => {
   }
 });
 // Scrape a single TikTok media (video) page
+
+/**
+ * Fetch a media page from TikVib, bypassing Cloudflare.
+ * Includes a generic Referer and retries if a challenge is detected.
+ */
+async function fetchMediaPageWithBrowserless(url) {
+  const apiKey = process.env.BROWSERLESS_API_KEY;
+  if (!apiKey) throw new Error('Missing BROWSERLESS_API_KEY');
+
+  const makeRequest = async (waitMs = 5000) => {
+    const resp = await axios.post(
+      `https://chrome.browserless.io/content?token=${apiKey}`,
+      {
+        url,
+        gotoOptions: {
+          waitUntil: 'networkidle0',
+          timeout: 20000,
+        },
+        waitForTimeout: waitMs,
+        headers: {
+          'Referer': 'https://www.tikvib.com/',   // generic – works for any video
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000,
+      }
+    );
+    return resp.data;
+  };
+
+  // First attempt
+  let html = await makeRequest(5000);
+
+  // If Cloudflare challenge still present, retry with a longer wait
+  if (html.includes('Just a moment') || html.includes('Checking your browser')) {
+    console.log('Cloudflare detected on media page, retrying…');
+    html = await makeRequest(10000);
+  }
+
+  return html;
+}
 // Scrape a single TikTok media (video) page – updated selectors
+// Scrape a single TikTok media (video) page – Cloudflare‑proof
 app.get('/api/media/:mediaId', async (req, res) => {
   const { mediaId } = req.params;
 
   try {
     const url = `https://www.tikvib.com/media/${mediaId}`;
-    const html = await fetchPageWithBrowserless(url);
-
-    if (html.includes('Page not found') || html.includes('Error 404')) {
-      return res.status(404).json({ error: 'Media not found' });
-    }
-
+    const html = await fetchMediaPageWithBrowserless(url);
     const $ = cheerio.load(html);
 
     // ── Video source & poster ───────────────────────
     const videoEl = $('video#video').first();
-    let videoSrc = videoEl.attr('src');               // e.g. "/player/7656653356366073109"
+    let videoSrc = videoEl.attr('src');
     if (videoSrc && videoSrc.startsWith('/')) {
       videoSrc = `https://www.tikvib.com${videoSrc}`;
     }
-    const poster = videoEl.attr('poster') || null;    // thumbnail
+    const poster = videoEl.attr('poster') || null;
 
     // ── Author ─────────────────────────────────────
     const authorName = $('.video-info-username').first().text().trim() || null;
@@ -141,14 +182,11 @@ app.get('/api/media/:mediaId', async (req, res) => {
     const shares = $('.video-stat-item .video-stat-number').eq(2).text().trim() || null;
     const collections = $('.video-stat-item .video-stat-number').eq(3).text().trim() || null;
     const viewsEl = $('.video-stat-item.views .video-stat-number').first();
-    const views = viewsEl.length ? viewsEl.text().trim() : (
-      $('.video-stat-bottom .video-stat-views span').text().replace(/\D/g, '').trim() || null
-    );
+    const views = viewsEl.length ? viewsEl.text().trim() : null;
 
     // ── Download links ─────────────────────────────
     const downloadVideo = $('.download-cards .download-media-button').eq(0).attr('href') || null;
     const downloadMusic = $('.download-cards .download-media-button').eq(1).attr('href') || null;
-    // Make them absolute
     const absDownloadVideo = downloadVideo
       ? (downloadVideo.startsWith('http') ? downloadVideo : `https://www.tikvib.com${downloadVideo}`)
       : null;
@@ -156,29 +194,13 @@ app.get('/api/media/:mediaId', async (req, res) => {
       ? (downloadMusic.startsWith('http') ? downloadMusic : `https://www.tikvib.com${downloadMusic}`)
       : null;
 
-    // ── Metadata ───────────────────────────────────
-    const title = $('title').first().text().trim().replace(/\s*-\s*Tikvib.*$/i, '') || null;
-    const description = $('meta[name="description"]').attr('content')?.trim() || null;
-
     res.json({
       mediaId,
-      title,
-      description,
-      video: {
-        src: videoSrc,           // direct video stream URL (may require referrer)
-        poster,
-      },
-      download: {
-        video: absDownloadVideo, // e.g. https://www.tikvib.com/tiktok-download/...
-        music: absDownloadMusic,
-      },
-      stats: {
-        likes,
-        views,
-        comments,
-        shares,
-        collections,
-      },
+      title: $('title').first().text().trim().replace(/\s*-\s*Tikvib.*$/i, '') || null,
+      description: $('meta[name="description"]').attr('content')?.trim() || null,
+      video: { src: videoSrc, poster },
+      download: { video: absDownloadVideo, music: absDownloadMusic },
+      stats: { likes, views, comments, shares, collections },
       author: {
         name: authorName,
         link: authorLink ? `https://www.tikvib.com${authorLink}` : null,
